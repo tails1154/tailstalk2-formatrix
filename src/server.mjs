@@ -111,7 +111,16 @@ async function loadRooms(session) {
     ws.onerror = () => { clearTimeout(timer); reject(new Error("events unavailable")); };
   });
   const servers = ready.servers || [];
-  const channels = ready.channels || [];
+  const channels = [...(ready.channels || [])];
+  try {
+    const directMessages = await tt("/users/@me/dms", session.token);
+    for (const channel of Array.isArray(directMessages) ? directMessages : []) {
+      const id = channel._id || channel.id;
+      if (id && !channels.some((existing) => (existing._id || existing.id) === id)) channels.push(channel);
+    }
+  } catch (error) {
+    console.log(`[rooms] direct-messages status=${error.status || "network-error"}`);
+  }
   session.rooms = { servers, channels, users: ready.users || [] };
   session.roomsAt = Date.now();
   startFeed(session);
