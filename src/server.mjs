@@ -135,27 +135,47 @@ function startFeed(session) {
   } catch {}
 }
 
-function roomSummary(channel, server, session) {
-  return { room_id: roomId(channel._id || channel.id), name: channel.name || "TailsTalk channel", joined_members: 1, membership: "join", is_direct: false, creation_content: { type: "m.space" }, server_id: server?._id || server?.id };
+function roomSummary(channel, server) {
+  return { room_id: roomId(channel._id || channel.id), name: channel.name || "TailsTalk channel", joined_members: 1, membership: "join", is_direct: false, server_id: server?._id || server?.id };
+}
+
+function eventSender(session, authorId) {
+  const author = (session.rooms?.users || []).find((user) => (user._id || user.id) === authorId);
+  return matrixUser(author || { id: authorId, username: authorId });
 }
 
 async function sync(req, res, session) {
   try {
     const rooms = await loadRooms(session);
     const joined = {};
+    const serverChannels = new Map();
+    for (const server of rooms.servers) {
+      const serverId = server._id || server.id;
+      const children = rooms.channels.filter((channel) => (server.channels || []).includes(channel._id || channel.id));
+      for (const channel of children) serverChannels.set(channel._id || channel.id, server);
+      const space = spaceId(serverId);
+      const stateEvents = [
+        { type: "m.room.create", state_key: "", event_id: eventId(`${serverId}-create`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { type: "m.space", creator: matrixUser(session.user) } },
+        { type: "m.room.name", state_key: "", event_id: eventId(`${serverId}-name`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { name: server.name || "TailsTalk server" } },
+      ];
+      for (const channel of children) {
+        stateEvents.push({ type: "m.space.child", state_key: roomId(channel._id || channel.id), event_id: eventId(`${serverId}-${channel._id || channel.id}`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { via: [SERVER_NAME] } });
+      }
+      joined[space] = { summary: { room_id: space, name: server.name || "TailsTalk server", joined_members: 1, membership: "join", is_direct: false }, state: { events: stateEvents }, timeline: { limited: true, prev_batch: "0", events: [] } };
+    }
     for (const channel of rooms.channels) {
-      const server = rooms.servers.find((item) => (item.channels || []).includes(channel._id || channel.id));
+      const server = serverChannels.get(channel._id || channel.id);
       const id = roomId(channel._id || channel.id);
       const events = (session.events || [])
         .filter(({ event }) => (event.channel || event.channel_id) === (channel._id || channel.id))
         .map(({ event }) => ({
           type: "m.room.message",
           event_id: eventId(event._id || event.id),
-          sender: `@${event.author || "unknown"}:${SERVER_NAME}`,
+          sender: eventSender(session, event.author),
           origin_server_ts: Date.now(),
           content: { msgtype: "m.text", body: event.content || "" },
         }));
-      joined[id] = { summary: roomSummary(channel, server, session), timeline: { limited: true, prev_batch: "0", events } };
+      joined[id] = { summary: roomSummary(channel, server), state: { events: [{ type: "m.room.create", state_key: "", event_id: eventId(`${id}-create`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { creator: matrixUser(session.user) } }, { type: "m.room.name", state_key: "", event_id: eventId(`${id}-name`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { name: channel.name || "TailsTalk channel" } }] }, timeline: { limited: true, prev_batch: "0", events } };
     }
     const next = String(Number(session.nextBatch || 0) + 1);
     session.nextBatch = next;
