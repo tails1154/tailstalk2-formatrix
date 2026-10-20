@@ -7,7 +7,9 @@ const server = spawn(process.execPath, ["src/server.mjs"], {
   stdio: "ignore",
 });
 try {
-  await new Promise((resolve) => setTimeout(resolve, 250));
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try { await fetch(`http://127.0.0.1:${port}/health`); break; } catch { await new Promise((resolve) => setTimeout(resolve, 100)); }
+  }
   const health = await fetch(`http://127.0.0.1:${port}/health`).then((r) => r.json());
   assert.equal(health.ok, true);
   const versions = await fetch(`http://127.0.0.1:${port}/_matrix/client/versions`).then((r) => r.json());

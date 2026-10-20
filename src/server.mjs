@@ -6,6 +6,7 @@ const PORT = Number(process.env.PORT || 8080);
 const API = (process.env.TAILSTALK_API_URL || "https://tails1154.com:9961/api").replace(/\/$/, "");
 const EVENTS = process.env.TAILSTALK_EVENTS_URL || "wss://tails1154.com:9961/events";
 const SERVER_NAME = process.env.MATRIX_SERVER_NAME || "tails1154.com:9961";
+const TAILSTALK_EMAIL_DOMAIN = process.env.TAILSTALK_EMAIL_DOMAIN || "tails1154.com";
 const DATA_DIR = process.env.DATA_DIR || new URL("../data", import.meta.url).pathname;
 const STATE_FILE = `${DATA_DIR}/state.json`;
 const sessions = new Map();
@@ -72,7 +73,9 @@ async function login(req, res) {
   if (!data || data.type !== "m.login.password" || !userIdentifier || !data.password) {
     return matrixError(res, 400, "M_BAD_JSON", "A password login is required");
   }
-  const email = userIdentifier.includes("@") ? userIdentifier : undefined;
+  const email = userIdentifier.startsWith("@") && userIdentifier.includes(":")
+    ? `${userIdentifier.slice(1).split(":")[0]}@${TAILSTALK_EMAIL_DOMAIN}`
+    : userIdentifier.includes("@") ? userIdentifier : undefined;
   if (!email) return matrixError(res, 400, "M_INVALID_USERNAME", "Use the TailsTalk account email as the Matrix username");
   try {
     const result = await tt("/auth/session/login", undefined, {
