@@ -174,7 +174,8 @@ async function sendMessage(req, res, session, room, txn) {
 
 async function route(req, res) {
   const parts = pathParts(req);
-  const suffix = parts[0] === "_matrix" && parts[1] === "client" ? parts.slice(2) : parts;
+  let suffix = parts[0] === "_matrix" && parts[1] === "client" ? parts.slice(2) : parts;
+  if (suffix[0]?.startsWith("v") || suffix[0]?.startsWith("r")) suffix = suffix.slice(1);
   if (req.method === "GET" && parts.join("/") === ".well-known/matrix/client") {
     return json(res, 200, { "m.homeserver": { base_url: `https://${SERVER_NAME}/matrix` } });
   }
