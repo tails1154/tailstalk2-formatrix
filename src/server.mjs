@@ -92,7 +92,9 @@ async function login(req, res) {
     await saveState();
     return json(res, 200, { user_id: matrixUser(user), access_token: matrixToken, device_id: "TT2MATRIX", home_server: SERVER_NAME });
   } catch (error) {
-    return matrixError(res, error.status === 401 ? 403 : 502, error.status === 401 ? "M_FORBIDDEN" : "M_UNKNOWN", "TailsTalk login failed");
+    console.log(`[login] TailsTalk response status=${error.status || "network-error"}`);
+    const credentialsFailed = [400, 401, 403].includes(error.status);
+    return matrixError(res, credentialsFailed ? 403 : 502, credentialsFailed ? "M_FORBIDDEN" : "M_UNKNOWN", credentialsFailed ? "Invalid TailsTalk credentials" : "TailsTalk login failed");
   }
 }
 
