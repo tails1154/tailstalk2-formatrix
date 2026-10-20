@@ -75,7 +75,7 @@ async function login(req, res) {
   }
   const email = userIdentifier.startsWith("@") && userIdentifier.includes(":")
     ? `${userIdentifier.slice(1).split(":")[0]}@${TAILSTALK_EMAIL_DOMAIN}`
-    : userIdentifier.includes("@") ? userIdentifier : undefined;
+    : userIdentifier.includes("@") ? userIdentifier : `${userIdentifier}@${TAILSTALK_EMAIL_DOMAIN}`;
   if (!email) return matrixError(res, 400, "M_INVALID_USERNAME", "Use the TailsTalk account email as the Matrix username");
   try {
     const result = await tt("/auth/session/login", undefined, {
