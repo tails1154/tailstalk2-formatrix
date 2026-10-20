@@ -182,10 +182,25 @@ async function sync(req, res, session) {
         }));
       joined[id] = { summary: roomSummary(channel, server), state: { events: [{ type: "m.room.create", state_key: "", event_id: eventId(`${id}-create`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { creator: matrixUser(session.user) } }, { type: "m.room.name", state_key: "", event_id: eventId(`${id}-name`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { name: channel.name || "TailsTalk channel" } }] }, timeline: { limited: true, prev_batch: "0", events } };
     }
+    console.log(`[sync] servers=${rooms.servers.length} channels=${rooms.channels.length}`);
     const next = String(Number(session.nextBatch || 0) + 1);
     session.nextBatch = next;
     return json(res, 200, { next_batch: next, rooms: { join: joined }, account_data: { events: [] }, presence: { events: [] }, to_device: { events: [] } });
   } catch { return matrixError(res, 502, "M_UNKNOWN", "Unable to load TailsTalk rooms"); }
+}
+
+async function hierarchy(req, res, session, encodedRoomId) {
+  try {
+    const room = decodeURIComponent(encodedRoomId);
+    const rooms = await loadRooms(session);
+    const serverId = room.match(/^!tt2_server_(.+):/i)?.[1];
+    const server = rooms.servers.find((item) => (item._id || item.id) === serverId);
+    if (!server) return matrixError(res, 404, "M_NOT_FOUND", "Room not found");
+    const children = rooms.channels
+      .filter((channel) => (server.channels || []).includes(channel._id || channel.id))
+      .map((channel) => ({ room_id: roomId(channel._id || channel.id), name: channel.name || "TailsTalk channel", children_state: [] }));
+    return json(res, 200, { room: { room_id: room, name: server.name || "TailsTalk server" }, children, inaccessible_children: false, next_batch: null });
+  } catch { return matrixError(res, 404, "M_NOT_FOUND", "Room not found"); }
 }
 
 async function sendMessage(req, res, session, room, txn) {
@@ -212,6 +227,7 @@ async function route(req, res) {
   const session = sessionFrom(req);
   if (!session) return matrixError(res, 401, "M_UNAUTHORIZED", "Missing Matrix access token");
   if (req.method === "GET" && suffix[0] === "sync") return sync(req, res, session);
+  if (req.method === "GET" && suffix[0] === "rooms" && suffix[2] === "hierarchy") return hierarchy(req, res, session, suffix[1]);
   if (req.method === "PUT" && suffix[0] === "rooms" && suffix[2] === "send" && suffix[3] === "m.room.message") return sendMessage(req, res, session, suffix[1], suffix[4]);
   return matrixError(res, 404, "M_NOT_FOUND", "Unsupported Matrix endpoint");
 }
