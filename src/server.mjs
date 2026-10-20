@@ -205,6 +205,7 @@ async function route(req, res) {
   }
   if (req.method === "GET" && suffix[0] === "health") return json(res, 200, { ok: true, service: "tailstalk2-formatrix" });
   if (req.method === "GET" && (suffix[0] === "versions" || suffix.length === 0)) return json(res, 200, { versions: ["r0.6.1", "v1.1"] });
+  if (req.method === "GET" && suffix[0] === "login") return json(res, 200, { flows: [{ type: "m.login.password" }] });
   if (req.method === "POST" && suffix[0] === "login") return login(req, res);
   const session = sessionFrom(req);
   if (!session) return matrixError(res, 401, "M_UNAUTHORIZED", "Missing Matrix access token");
