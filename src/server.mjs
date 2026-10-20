@@ -213,4 +213,9 @@ async function route(req, res) {
   return matrixError(res, 404, "M_NOT_FOUND", "Unsupported Matrix endpoint");
 }
 
-createServer((req, res) => route(req, res).catch(() => matrixError(res, 500, "M_UNKNOWN", "Internal server error"))).listen(PORT, "0.0.0.0", () => console.log(`tailstalk2-formatrix listening on ${PORT}`));
+createServer((req, res) => {
+  const startedAt = Date.now();
+  const pathname = new URL(req.url, `http://${req.headers.host || "localhost"}`).pathname;
+  res.on("finish", () => console.log(`[request] ${req.method} ${pathname} ${res.statusCode} ${Date.now() - startedAt}ms`));
+  route(req, res).catch(() => matrixError(res, 500, "M_UNKNOWN", "Internal server error"));
+}).listen(PORT, "0.0.0.0", () => console.log(`tailstalk2-formatrix listening on ${PORT}`));
