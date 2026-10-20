@@ -16,7 +16,7 @@ let state = { tokens: {} };
 await mkdir(DATA_DIR, { recursive: true });
 try { state = JSON.parse(await readFile(STATE_FILE, "utf8")); } catch {}
 for (const [matrixToken, saved] of Object.entries(state.tokens || {})) {
-  if (saved?.token && saved?.userId) sessions.set(matrixToken, { token: saved.token, userId: saved.userId, nextBatch: 0 });
+  if (saved?.token && saved?.userId) sessions.set(matrixToken, { token: saved.token, userId: saved.userId, nextBatch: 0, fullSyncDelivered: false });
 }
 
 async function saveState() {
@@ -114,7 +114,7 @@ async function login(req, res) {
     if (!token || !result.user_id) return matrixError(res, 502, "M_UNKNOWN", "TailsTalk returned an invalid session");
     const matrixToken = accessToken();
     const user = await tt(`/users/${result.user_id}`, token);
-    const session = { token, userId: result.user_id, user, nextBatch: 0 };
+    const session = { token, userId: result.user_id, user, nextBatch: 0, fullSyncDelivered: false };
     sessions.set(matrixToken, session);
     state.tokens[matrixToken] = { token, userId: result.user_id };
     await saveState();
@@ -189,7 +189,16 @@ function eventSender(session, authorId) {
 
 async function sync(req, res, session) {
   try {
+    const query = new URL(req.url, `http://${req.headers.host || "localhost"}`).searchParams;
     const rooms = await loadRooms(session);
+    // The initial response contains the complete projection.  Matrix clients
+    // then poll with `since`; repeating the complete room tree causes clients
+    // such as NeoChat to tear down and rebuild their room list indefinitely.
+    if (query.has("since") && session.fullSyncDelivered) {
+      const next = String(Number(session.nextBatch || 0) + 1);
+      session.nextBatch = next;
+      return json(res, 200, { next_batch: next, rooms: { join: {}, invite: {}, leave: {} }, account_data: { events: [] }, presence: { events: [] }, to_device: { events: [] } });
+    }
     const joined = {};
     const serverChannels = new Map();
     for (const server of rooms.servers) {
@@ -220,6 +229,7 @@ async function sync(req, res, session) {
     console.log(`[sync] servers=${rooms.servers.length} channels=${rooms.channels.length}`);
     const next = String(Number(session.nextBatch || 0) + 1);
     session.nextBatch = next;
+    session.fullSyncDelivered = true;
     return json(res, 200, { next_batch: next, rooms: { join: joined }, account_data: { events: [] }, presence: { events: [] }, to_device: { events: [] } });
   } catch { return matrixError(res, 502, "M_UNKNOWN", "Unable to load TailsTalk rooms"); }
 }
