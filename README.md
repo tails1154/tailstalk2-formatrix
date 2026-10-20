@@ -12,4 +12,4 @@ metadata, message sending, and live message delivery.
 
 The public homeserver URL for this deployment is:
 
-`https://tails1154.com:9961/matrix`
+`https://tailstalk2.com/matrix`

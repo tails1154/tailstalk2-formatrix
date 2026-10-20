@@ -5,7 +5,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 const PORT = Number(process.env.PORT || 8080);
 const API = (process.env.TAILSTALK_API_URL || "https://tails1154.com:9961/api").replace(/\/$/, "");
 const EVENTS = process.env.TAILSTALK_EVENTS_URL || "wss://tails1154.com:9961/events";
-const SERVER_NAME = process.env.MATRIX_SERVER_NAME || "tails1154.com:9961";
+const SERVER_NAME = process.env.MATRIX_SERVER_NAME || "tailstalk2.com";
 const TAILSTALK_EMAIL_DOMAIN = process.env.TAILSTALK_EMAIL_DOMAIN || "tails1154.com";
 const DATA_DIR = process.env.DATA_DIR || new URL("../data", import.meta.url).pathname;
 const STATE_FILE = `${DATA_DIR}/state.json`;
