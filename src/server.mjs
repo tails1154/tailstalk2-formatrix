@@ -68,10 +68,11 @@ function sessionFrom(req) {
 
 async function login(req, res) {
   const data = await body(req);
-  if (!data || data.type !== "m.login.password" || !data.user || !data.password) {
+  const userIdentifier = data?.user || data?.identifier?.user;
+  if (!data || data.type !== "m.login.password" || !userIdentifier || !data.password) {
     return matrixError(res, 400, "M_BAD_JSON", "A password login is required");
   }
-  const email = data.user.includes("@") ? data.user : data.identifier?.user;
+  const email = userIdentifier.includes("@") ? userIdentifier : undefined;
   if (!email) return matrixError(res, 400, "M_INVALID_USERNAME", "Use the TailsTalk account email as the Matrix username");
   try {
     const result = await tt("/auth/session/login", undefined, {
