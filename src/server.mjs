@@ -62,7 +62,20 @@ function accessToken() { return `tt2_${randomBytes(32).toString("base64url")}`; 
 function matrixUser(user) { return `@${String(user.username || user.id).replace(/[^a-zA-Z0-9._=-]/g, "_")}:${SERVER_NAME}`; }
 function roomId(channelId) { return `!tt2_${channelId}:${SERVER_NAME}`; }
 function spaceId(serverId) { return `!tt2_server_${serverId}:${SERVER_NAME}`; }
-function eventId(id = randomUUID()) { return `$tt2_${id}`; }
+// Matrix event IDs are opaque identifiers.  Do not embed TailsTalk or room IDs
+// here: those IDs contain punctuation that some clients reject as malformed.
+function eventId() { return `$tt2_${randomUUID()}`; }
+
+function membershipEvent(session) {
+  return {
+    type: "m.room.member",
+    state_key: matrixUser(session.user),
+    event_id: eventId(),
+    sender: matrixUser(session.user),
+    origin_server_ts: Date.now(),
+    content: { membership: "join" },
+  };
+}
 
 function sessionFrom(req) {
   const auth = req.headers.authorization || "";
@@ -173,11 +186,12 @@ async function sync(req, res, session) {
       for (const channel of children) serverChannels.set(channel._id || channel.id, server);
       const space = spaceId(serverId);
       const stateEvents = [
-        { type: "m.room.create", state_key: "", event_id: eventId(`${serverId}-create`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { type: "m.space", creator: matrixUser(session.user) } },
-        { type: "m.room.name", state_key: "", event_id: eventId(`${serverId}-name`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { name: server.name || "TailsTalk server" } },
+        { type: "m.room.create", state_key: "", event_id: eventId(), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { type: "m.space", creator: matrixUser(session.user) } },
+        { type: "m.room.name", state_key: "", event_id: eventId(), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { name: server.name || "TailsTalk server" } },
+        membershipEvent(session),
       ];
       for (const channel of children) {
-        stateEvents.push({ type: "m.space.child", state_key: roomId(channel._id || channel.id), event_id: eventId(`${serverId}-${channel._id || channel.id}`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { via: [SERVER_NAME] } });
+        stateEvents.push({ type: "m.space.child", state_key: roomId(channel._id || channel.id), event_id: eventId(), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { via: [SERVER_NAME] } });
       }
       joined[space] = { summary: { room_id: space, name: server.name || "TailsTalk server", joined_members: 1, membership: "join", is_direct: false }, state: { events: stateEvents }, timeline: { limited: true, prev_batch: "0", events: [] } };
     }
@@ -193,7 +207,7 @@ async function sync(req, res, session) {
           origin_server_ts: Date.now(),
           content: { msgtype: "m.text", body: event.content || "" },
         }));
-      joined[id] = { summary: roomSummary(channel, server), state: { events: [{ type: "m.room.create", state_key: "", event_id: eventId(`${id}-create`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { creator: matrixUser(session.user) } }, { type: "m.room.name", state_key: "", event_id: eventId(`${id}-name`), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { name: channel.name || "TailsTalk channel" } }] }, timeline: { limited: true, prev_batch: "0", events } };
+      joined[id] = { summary: roomSummary(channel, server), state: { events: [{ type: "m.room.create", state_key: "", event_id: eventId(), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { creator: matrixUser(session.user), room_version: "11" } }, { type: "m.room.name", state_key: "", event_id: eventId(), sender: matrixUser(session.user), origin_server_ts: Date.now(), content: { name: channel.name || "TailsTalk channel" } }, membershipEvent(session)] }, timeline: { limited: true, prev_batch: "0", events } };
     }
     console.log(`[sync] servers=${rooms.servers.length} channels=${rooms.channels.length}`);
     const next = String(Number(session.nextBatch || 0) + 1);
@@ -212,7 +226,7 @@ async function hierarchy(req, res, session, encodedRoomId) {
     const children = rooms.channels
       .filter((channel) => (server.channels || []).includes(channel._id || channel.id))
       .map((channel) => ({ room_id: roomId(channel._id || channel.id), name: channel.name || "TailsTalk channel", children_state: [] }));
-    return json(res, 200, { room: { room_id: room, name: server.name || "TailsTalk server" }, children, inaccessible_children: false, next_batch: null });
+    return json(res, 200, { rooms: [{ room_id: room, name: server.name || "TailsTalk server", world_readable: false, guest_can_join: false }, ...children], inaccessible_children: false, next_batch: null });
   } catch { return matrixError(res, 404, "M_NOT_FOUND", "Room not found"); }
 }
 
