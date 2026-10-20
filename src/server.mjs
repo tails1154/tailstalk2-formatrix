@@ -15,6 +15,9 @@ let state = { tokens: {} };
 
 await mkdir(DATA_DIR, { recursive: true });
 try { state = JSON.parse(await readFile(STATE_FILE, "utf8")); } catch {}
+for (const [matrixToken, saved] of Object.entries(state.tokens || {})) {
+  if (saved?.token && saved?.userId) sessions.set(matrixToken, { token: saved.token, userId: saved.userId, nextBatch: 0 });
+}
 
 async function saveState() {
   await writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf8");
@@ -99,6 +102,7 @@ async function login(req, res) {
 }
 
 async function loadRooms(session) {
+  if (!session.user) session.user = await tt(`/users/${session.userId}`, session.token);
   if (session.rooms && Date.now() - session.roomsAt < 15000) return session.rooms;
   const ready = await new Promise((resolve, reject) => {
     const ws = new WebSocket(`${EVENTS}?version=1&format=json&token=${encodeURIComponent(session.token)}`);
